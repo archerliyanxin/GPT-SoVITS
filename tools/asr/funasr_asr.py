@@ -31,6 +31,7 @@ def only_asr(input_file):
         print(traceback.format_exc())
     return text
 
+
 def execute_asr(input_folder, output_folder, model_size, language):
     input_file_names = os.listdir(input_folder)
     input_file_names.sort()

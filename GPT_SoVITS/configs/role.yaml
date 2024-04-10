@@ -1,0 +1,15 @@
+lyx:
+  t2s_weights_path: GPT_SoVITS/pretrained_models/s1bert25hz-2kh-longer-epoch=68e-step=50232.ckpt
+  vits_weights_path: GPT_SoVITS/pretrained_models/s2G488k.pth
+  ref_wav: /home/xfa/Documents/workspace/GPT-SoVITS/audio/ref_audio/lyx/2023_090.wav
+  ref_text: 今天天气很好
+ljw:
+  t2s_weights_path: GPT_SoVITS/pretrained_models/s1bert25hz-2kh-longer-epoch=68e-step=50232.ckpt
+  vits_weights_path: GPT_SoVITS/pretrained_models/s2G488k.pth
+  ref_wav: /home/xfa/Documents/workspace/GPT-SoVITS/audio/ref_audio/lyx/2023_090.wav
+  ref: 今天天气很好
+fu_fu:
+  t2s_weights_path: GPT_SoVITS/pretrained_models/s1bert25hz-2kh-longer-epoch=68e-step=50232.ckpt
+  vits_weights_path: GPT_SoVITS/pretrained_models/s2G488k.pth
+  ref_wav: /home/xfa/Documents/workspace/GPT-SoVITS/audio/ref_audio/lyx/2023_090.wav
+  ref: 今天天气很好
