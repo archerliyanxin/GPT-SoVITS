@@ -13,7 +13,7 @@ class RoleConfigLoader:
 
     def load_config(self) -> Dict[str, Dict[str, str]]:
         with open(self.config_file, 'r', encoding='utf-8') as f:
-            role_config_map = yaml.safe_load(f)
+            role_config_map = yaml.load(f, Loader=yaml.FullLoader)
         return role_config_map
 
     def get_configs_for_role(self, role: str) -> Union[Dict[str, str], None]:

@@ -99,6 +99,8 @@ import sys
 import traceback
 from typing import Generator
 
+
+
 from GPT_SoVITS.TTS_infer_pack.Role import RoleConfigLoader
 from tools.asr.funasr_asr_utils import asr_text
 
@@ -112,7 +114,7 @@ import wave
 import signal
 import numpy as np
 import soundfile as sf
-from fastapi import FastAPI, Request, HTTPException, Response
+from fastapi import FastAPI, Request, HTTPException, Response, Form
 from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi import FastAPI, UploadFile, File
 import uvicorn
@@ -165,7 +167,7 @@ class TTS_Request(BaseModel):
 
 
 class VC_Request(BaseModel):
-    role: str = None
+    role: str
     audio_file: UploadFile
 
 # class ROLE_Request(BaseModel):
@@ -173,7 +175,7 @@ class VC_Request(BaseModel):
 #     vits_weights_path: str = "GPT_SoVITS/pretrained_models/s2G488k.pth"
 #     ref_wav: str = "/home/xfa/Documents/workspace/GPT-SoVITS/audio/ref_audio/lyx/2023_090.wav"
 
-role_config_loader = RoleConfigLoader("roles_configs.yaml")
+role_config_loader = RoleConfigLoader("GPT_SoVITS/configs/role.yaml")
 role_dict = role_config_loader.get_configs_for_role("default")
 ### modify from https://github.com/RVC-Boss/GPT-SoVITS/pull/894/files
 def pack_ogg(io_buffer:BytesIO, data:np.ndarray, rate:int):
@@ -397,18 +399,22 @@ async def tts_post_endpoint(request: TTS_Request):
     return await tts_handle(req)
 
 @APP.post("/vc")
-async def tts_post_endpoint(vcRequest: VC_Request):
-    req = vcRequest.dict()
-    audio_content = req.get("audio_file")
-    promote_text = asr_text(audio_content)
+async def voice_clone(role: str = Form(...), audio_file: UploadFile = File(...)):
+    print("into voice_clone")
+    # req = vcRequest.dict()
+    # audio_content = req.get("audio_file")
+    # return "hello"
+    promote_text = await asr_text(audio_file)
+    print(f"promote_text:%s"%promote_text)
     tts_request = TTS_Request()
     tts_request.text_lang = 'zh'.lower()
     tts_request.prompt_lang = 'zh'
-    tts_request.prompt_text = promote_text
+    tts_request.prompt_text = role_dict.get("ref_text")
     tts_request.ref_audio_path = role_dict.get("ref_wav")
-    tts_request.text = role_dict.get("text")
+    tts_request.text = promote_text
     tts_request.streaming_mode = True
-    return await tts_handle(tts_request)
+    print(tts_request.dict())
+    return await tts_handle(tts_request.dict())
 
 
 @APP.get("/set_refer_audio")
@@ -463,18 +469,34 @@ async def set_sovits_weights(weights_path: str = None):
 
 async def role_handle(role: str):
     role_dict = role_config_loader.get_configs_for_role(role)
+    print(role_dict)
     if role_dict:  # 假设路径一定存在
         tts_pipeline.init_vits_weights(role_dict.get("vits_weights_path"))
         tts_pipeline.init_t2s_weights(role_dict.get("t2s_weights_path"))
         tts_pipeline.set_ref_audio(role_dict.get("ref_wav"))
         JSONResponse(status_code=200, content={"message": "change role success"})
+        print("change role success")
     else:
         return JSONResponse(status_code=400, content={"message": f"role not exist"})
+        print("role not exist")
+
+async def list_role():
+    role_lists = []
+    for key in role_config_loader.role_config_map:
+        role_lists.append(key)
+    return role_lists
 
 
-@APP.post("/set_role")
-async def role_change(role: str):
-    return await role_handle(role)
+@APP.get("/get_role")
+async def role_list():
+    return await list_role()
+
+class RoleRequest(BaseModel):
+    role: str
+
+@APP.post("/set_role/")
+async def role_change(rq: RoleRequest):
+    return await role_handle(rq.role)
 
 
 if __name__ == "__main__":
