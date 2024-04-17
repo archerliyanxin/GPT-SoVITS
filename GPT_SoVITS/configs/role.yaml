@@ -1,15 +1,20 @@
 lyx:
-  t2s_weights_path: GPT_SoVITS/pretrained_models/s1bert25hz-2kh-longer-epoch=68e-step=50232.ckpt
-  vits_weights_path: GPT_SoVITS/pretrained_models/s2G488k.pth
-  ref_wav: /home/xfa/Documents/workspace/GPT-SoVITS/audio/ref_audio/lyx/2023_090.wav
-  ref_text: 今天天气很好
+  t2s_weights_path: GPT_weights/lyx-e15.ckpt
+  vits_weights_path: SoVITS_weights/lyx_e8_s32.pth
+  ref_wav: /home/xfa/Documents/workspace/GPT-SoVITS/audio/ref_audio/lyx/lyx_ref_audio.wav
+  ref_text: 根据某个变量的概率密度函数进行数据采样
 ljw:
-  t2s_weights_path: GPT_SoVITS/pretrained_models/s1bert25hz-2kh-longer-epoch=68e-step=50232.ckpt
-  vits_weights_path: GPT_SoVITS/pretrained_models/s2G488k.pth
-  ref_wav: /home/xfa/Documents/workspace/GPT-SoVITS/audio/ref_audio/lyx/2023_090.wav
-  ref: 今天天气很好
+  t2s_weights_path: GPT_weights/ljw-e15.ckpt
+  vits_weights_path: SoVITS_weights/ljw_e8_s48.pth
+  ref_wav: /home/xfa/Documents/workspace/GPT-SoVITS/audio/ref_audio/ljw/ljw_ref_audio.wav
+  ref_text: 两种方式通常都可以使用，采用前一种方法需要人
 fu_fu:
   t2s_weights_path: GPT_SoVITS/pretrained_models/s1bert25hz-2kh-longer-epoch=68e-step=50232.ckpt
   vits_weights_path: GPT_SoVITS/pretrained_models/s2G488k.pth
-  ref_wav: /home/xfa/Documents/workspace/GPT-SoVITS/audio/ref_audio/lyx/2023_090.wav
-  ref: 今天天气很好
+  ref_wav: /home/xfa/Documents/workspace/GPT-SoVITS/audio/ref_audio/fu_fu/2023_090.wav
+  ref_text: 今天天气很好
+default:
+  t2s_weights_path: GPT_SoVITS/pretrained_models/s1bert25hz-2kh-longer-epoch=68e-step=50232.ckpt
+  vits_weights_path: GPT_SoVITS/pretrained_models/s2G488k.pth
+  ref_wav: /home/xfa/Documents/workspace/GPT-SoVITS/audio/ref_audio/ljw/ljw_ref_audio.wav
+  ref_text: 两种方式通常都可以使用，采用前一种方法需要人
