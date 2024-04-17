@@ -65,7 +65,7 @@ cut_method_names = get_cut_method_names()
 
 parser = argparse.ArgumentParser(description="GPT-SoVITS api")
 parser.add_argument("-c", "--tts_config", type=str, default="GPT_SoVITS/configs/tts_infer.yaml", help="tts_infer路径")
-parser.add_argument("-a", "--bind_addr", type=str, default="127.0.0.1", help="default: 127.0.0.1")
+parser.add_argument("-a", "--bind_addr", type=str, default="0.0.0.0", help="default: 0.0.0.0")
 parser.add_argument("-p", "--port", type=int, default="9880", help="default: 9880")
 args = parser.parse_args()
 config_path = args.tts_config
@@ -94,8 +94,8 @@ def get_pretrain_model_path(env_name, log_file, def_path):
     return pretrain_path
 
 
-# device = "cuda" if torch.cuda.is_available() else "cpu"
-device = 'cpu'
+device = "cuda" if torch.cuda.is_available() else "cpu"
+# device = 'cpu'
 
 gpt_path = get_pretrain_model_path('gpt_path', "./gweight.txt",
                                    "GPT_SoVITS/pretrained_models/s1bert25hz-2kh-longer-epoch=68e-step=50232.ckpt")
@@ -521,7 +521,7 @@ class VC_Request(BaseModel):
 #     vits_weights_path: str = "GPT_SoVITS/pretrained_models/s2G488k.pth"
 #     ref_wav: str = "/home/xfa/Documents/workspace/GPT-SoVITS/audio/ref_audio/lyx/2023_090.wav"
 
-role_config_loader = RoleConfigLoader("roles_configs.yaml")
+role_config_loader = RoleConfigLoader("GPT_SoVITS/configs/role.yaml")
 role_dict = role_config_loader.get_configs_for_role("default")
 
 
@@ -691,13 +691,14 @@ async def tts_handle(req: dict):
     except Exception as e:
         return JSONResponse(status_code=400, content={"message": f"tts failed", "Exception": str(e)})
 
-async def vc_handle(req: dict):
+async def vc_handle(save_path: str):
     try:
-        audio_content = req.get("audio_file")
-        os.makedirs("uploaded_audio", exist_ok=True)
-        save_path = os.path.join("uploaded_audio", audio_content.filename)
-        with open(save_path, "wb") as buffer:
-            buffer.write(await audio_content.read())
+        # audio_content = req.get("audio_file")
+        # os.makedirs("uploaded_audio", exist_ok=True)
+        # save_path = os.path.join("uploaded_audio", audio_content.filename)
+        # with open(save_path, "wb") as buffer:
+        #     buffer.write(await audio_content.read())
+        print("vc_handle"+role_dict.get("ref_wav"))
         sr, audio_data = vc_main(role_dict.get("ref_wav"),role_dict.get("ref_text"),"zh",save_path)
 
         audio_data = pack_audio(BytesIO(), audio_data, sr, "wav").getvalue()
@@ -776,9 +777,15 @@ async def svc_post_endpoint(vcRequest: VC_Request):
     return await tts_handle(tts_request)
 
 @APP.post("/vc")
-async def vc_post_endpoint(vcRequest: VC_Request):
+async def vc_post_endpoint(audio_file: UploadFile = File(...)):
+    # return audio_file.filename
+    # audio_content = req.get("audio_file")
+    os.makedirs("uploaded_audio", exist_ok=True)
+    save_path = os.path.join("uploaded_audio", audio_file.filename)
+    with open(save_path, "wb") as buffer:
+        buffer.write(await audio_file.read())
 
-    return await vc_handle(VC_Request)
+    return await vc_handle(save_path)
 
 @APP.get("/set_refer_audio")
 async def set_refer_aduio(refer_audio_path: str = None):
