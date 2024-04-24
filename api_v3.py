@@ -96,7 +96,7 @@ def get_pretrain_model_path(env_name, log_file, def_path):
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 # device = 'cpu'
-
+# torch.cuda.set_device("cuda:0")
 gpt_path = get_pretrain_model_path('gpt_path', "./gweight.txt",
                                    "GPT_SoVITS/pretrained_models/s1bert25hz-2kh-longer-epoch=68e-step=50232.ckpt")
 
@@ -110,8 +110,7 @@ bert_path = get_pretrain_model_path("bert_path", '', "GPT_SoVITS/pretrained_mode
 
 is_share = eval(os.environ.get("is_share", "False"))
 
-if "_CUDA_VISIBLE_DEVICES" in os.environ:
-    os.environ["CUDA_VISIBLE_DEVICES"] = os.environ["_CUDA_VISIBLE_DEVICES"]
+os.environ['CUDA_VISIBLE_DEVICES'] ='0'
 
 # is_half = eval(os.environ.get("is_half", "True")) and not torch.backends.mps.is_available()
 is_half = False
@@ -183,7 +182,7 @@ else:
 
 def change_sovits_weights(sovits_path):
     global vq_model, hps
-    dict_s2 = torch.load(sovits_path, map_location="cpu")
+    dict_s2 = torch.load(sovits_path, map_location=device)
     hps = dict_s2["config"]
     hps = DictToAttrRecursive(hps)
     hps.model.semantic_frame_rate = "25hz"
@@ -205,13 +204,13 @@ def change_sovits_weights(sovits_path):
         f.write(sovits_path)
 
 
-change_sovits_weights(sovits_path)
+# change_sovits_weights(sovits_path)
 
 
 def change_gpt_weights(gpt_path):
     global hz, max_sec, t2s_model, config
     hz = 50
-    dict_s1 = torch.load(gpt_path, map_location="cpu")
+    dict_s1 = torch.load(gpt_path, map_location=device)
     config = dict_s1["config"]
     max_sec = config["data"]["max_sec"]
     t2s_model = Text2SemanticLightningModule(config, "****", is_train=False)
@@ -225,7 +224,7 @@ def change_gpt_weights(gpt_path):
     with open("./gweight.txt", "w", encoding="utf-8") as f: f.write(gpt_path)
 
 
-change_gpt_weights(gpt_path)
+# change_gpt_weights(gpt_path)
 
 
 def get_spepc(hps, filename):
@@ -292,7 +291,7 @@ dtype =torch.float16 if is_half == True else torch.float32
 def get_bert_inf(phones, word2ph, norm_text, language):
     language =language.replace("all_" ,"")
     if language == "zh":
-        bert = get_bert_feature(norm_text, word2ph).to(device  )  # .to(dtype)
+        bert = get_bert_feature(norm_text, word2ph).to(device)  # .to(dtype)
     else:
         bert = torch.zeros(
             (1024, len(phones)),
@@ -465,14 +464,17 @@ def vc_main(wav_path, text, language, prompt_wav, noise_scale=0.5):
     language: 对应语言
     prompt_wav: 目标人声
     """
-    language = dict_language[language]
+
+    # language = dict_language[language]
+    language = "all_zh"
+
 
     phones, word2ph, norm_text = get_cleaned_text_final(text, language)
 
     spec = get_spepc(hps, prompt_wav)
     codes = get_code_from_wav(wav_path)[None, None]  # 必须是 3D, [n_q, B, T]
-    ge = vq_model.ref_enc(spec)  # [B, D, T/1]
-    quantized = vq_model.quantizer.decode(codes)  # [B, D, T]
+    ge = vq_model.ref_enc(spec.to(device))  # [B, D, T/1]
+    quantized = vq_model.quantizer.decode(codes.to(device))  # [B, D, T]
     if hps.model.semantic_frame_rate == "25hz":
         quantized = F.interpolate(
             quantized, size=int(quantized.shape[-1] * 2), mode="nearest"
@@ -691,7 +693,7 @@ async def tts_handle(req: dict):
     except Exception as e:
         return JSONResponse(status_code=400, content={"message": f"tts failed", "Exception": str(e)})
 
-async def vc_handle(save_path: str):
+def vc_handle(save_path: str):
     try:
         # audio_content = req.get("audio_file")
         # os.makedirs("uploaded_audio", exist_ok=True)
@@ -700,7 +702,7 @@ async def vc_handle(save_path: str):
         #     buffer.write(await audio_content.read())
         print("vc_handle"+role_dict.get("ref_wav"))
         sr, audio_data = vc_main(role_dict.get("ref_wav"),role_dict.get("ref_text"),"zh",save_path)
-
+        print("sr is "+sr)
         audio_data = pack_audio(BytesIO(), audio_data, sr, "wav").getvalue()
         return Response(audio_data, media_type=f"audio/wav")
 
@@ -780,12 +782,13 @@ async def svc_post_endpoint(vcRequest: VC_Request):
 async def vc_post_endpoint(audio_file: UploadFile = File(...)):
     # return audio_file.filename
     # audio_content = req.get("audio_file")
-    os.makedirs("uploaded_audio", exist_ok=True)
-    save_path = os.path.join("uploaded_audio", audio_file.filename)
-    with open(save_path, "wb") as buffer:
-        buffer.write(await audio_file.read())
 
-    return await vc_handle(save_path)
+    # os.makedirs("uploaded_audio", exist_ok=True)
+    # save_path = os.path.join("uploaded_audio", audio_file.filename)
+    # with open(save_path, "wb") as buffer:
+    #     buffer.write(await audio_file.read())
+
+    return  vc_handle("uploaded_audio/kkk1.wav")
 
 @APP.get("/set_refer_audio")
 async def set_refer_aduio(refer_audio_path: str = None):
@@ -853,10 +856,14 @@ async def role_change(role: str):
     return await role_handle(role)
 
 
+
 if __name__ == "__main__":
-    try:
-        uvicorn.run(APP, host=host, port=port, workers=1)
-    except Exception as e:
-        traceback.print_exc()
-        os.kill(os.getpid(), signal.SIGTERM)
-        exit(0)
+    save_path = "uploaded_audio/kkk1.wav"
+    sr, audio_data = vc_main(role_dict.get("ref_wav"), role_dict.get("ref_text"), "zh", save_path)
+    print(sr)
+    # try:
+    #     uvicorn.run(APP, host=host, port=port, workers=1)
+    # except Exception as e:
+    #     traceback.print_exc()
+    #     os.kill(os.getpid(), signal.SIGTERM)
+    #     exit(0)

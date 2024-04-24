@@ -128,7 +128,7 @@ cut_method_names = get_cut_method_names()
 
 parser = argparse.ArgumentParser(description="GPT-SoVITS api")
 parser.add_argument("-c", "--tts_config", type=str, default="GPT_SoVITS/configs/tts_infer.yaml", help="tts_infer路径")
-parser.add_argument("-a", "--bind_addr", type=str, default="127.0.0.1", help="default: 127.0.0.1")
+parser.add_argument("-a", "--bind_addr", type=str, default="0.0.0.0", help="default: 127.0.0.1")
 parser.add_argument("-p", "--port", type=int, default="9880", help="default: 9880")
 args = parser.parse_args()
 config_path = args.tts_config
@@ -173,8 +173,8 @@ class VC_Request(BaseModel):
 #     vits_weights_path: str = "GPT_SoVITS/pretrained_models/s2G488k.pth"
 #     ref_wav: str = "/home/xfa/Documents/workspace/GPT-SoVITS/audio/ref_audio/lyx/2023_090.wav"
 
-role_config_loader = RoleConfigLoader("roles_configs.yaml")
-role_dict = role_config_loader.get_configs_for_role("default")
+role_config_loader = RoleConfigLoader("GPT_SoVITS/configs/role.yaml")
+role_dict = role_config_loader.get_configs_for_role("ljw")
 ### modify from https://github.com/RVC-Boss/GPT-SoVITS/pull/894/files
 def pack_ogg(io_buffer:BytesIO, data:np.ndarray, rate:int):
     with sf.SoundFile(io_buffer, mode='w', samplerate=rate, channels=1, format='ogg') as audio_file:
@@ -306,7 +306,7 @@ async def tts_handle(req:dict):
     returns:
         StreamingResponse: audio stream response.
     """
-    
+    print("into tts_handle")
     streaming_mode = req.get("streaming_mode", False)
     media_type = req.get("media_type", "wav")
 
@@ -397,18 +397,19 @@ async def tts_post_endpoint(request: TTS_Request):
     return await tts_handle(req)
 
 @APP.post("/vc")
-async def tts_post_endpoint(vcRequest: VC_Request):
-    req = vcRequest.dict()
-    audio_content = req.get("audio_file")
-    promote_text = asr_text(audio_content)
+async def vc_post_endpoint(audio_file: UploadFile = File(...)):
+    promote_text =await asr_text(audio_file)
+    print("promote_text"+promote_text)
     tts_request = TTS_Request()
     tts_request.text_lang = 'zh'.lower()
     tts_request.prompt_lang = 'zh'
-    tts_request.prompt_text = promote_text
+    tts_request.prompt_text = role_dict.get("ref_text")
     tts_request.ref_audio_path = role_dict.get("ref_wav")
-    tts_request.text = role_dict.get("text")
+    tts_request.text = promote_text
     tts_request.streaming_mode = True
-    return await tts_handle(tts_request)
+    req = tts_request.dict()
+    print(req)
+    return await tts_handle(req)
 
 
 @APP.get("/set_refer_audio")
