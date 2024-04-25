@@ -95,8 +95,11 @@ RESP:
     
 """
 import os
+import shutil
 import sys
+import time
 import traceback
+import zipfile
 from typing import Generator
 
 from GPT_SoVITS.TTS_infer_pack.Role import RoleConfigLoader
@@ -476,6 +479,55 @@ async def role_handle(role: str):
 @APP.post("/set_role")
 async def role_change(role: str):
     return await role_handle(role)
+
+def ml_service(task_id: str, file_path: str):
+    time.sleep(60)
+    # r.hset("tasks", task_id, "completed")
+
+async def unzip_file(zip_path, dest_dir):
+    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+        zip_ref.extractall(dest_dir)
+
+from pydub import AudioSegment
+async def concatenate_audio_files(audio_files, output_file):
+    combined = None
+    for file in audio_files:
+        sound = AudioSegment.from_file(file)
+        if combined is None:
+            combined = sound
+        else:
+            combined += sound
+    combined.export(output_file, format="wav")
+
+from fastapi import BackgroundTasks
+import redis
+import uuid
+# r = redis.Redis(host='localhost', port=6380, db=0)
+@APP.post("/train")
+async def submit_task(background_tasks: BackgroundTasks, audio_file: UploadFile = File(...)):
+    with open(audio_file.filename, "wb") as buffer:
+        shutil.copyfileobj(audio_file.file, buffer)
+    extract_dir = "tmp"
+    os.makedirs(extract_dir, exist_ok=True)
+    await unzip_file(audio_file.filename, extract_dir)
+    audio_files = [os.path.join(extract_dir, f) for f in os.listdir(extract_dir) if f.endswith(".wav")]
+    output_wav ="uploaded_audio/"+ audio_file.filename+".wav"
+    print(output_wav)
+    await concatenate_audio_files(audio_files,output_wav)
+    shutil.rmtree(extract_dir)
+    os.remove(audio_file.filename)
+    # 将整个文件urv5降噪，得到一整块音频
+
+    # 生成唯一任务号
+    task_id = str(uuid.uuid4())
+
+    # 将任务号和状态信息写入 Redis
+    # r.hset("tasks", task_id, "running")
+
+    # 调用后台任务处理机器学习服务
+    background_tasks.add_task(ml_service, task_id,output_wav)
+
+    return {"task_id": task_id}
 
 
 if __name__ == "__main__":
