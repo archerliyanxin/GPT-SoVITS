@@ -104,6 +104,7 @@ from typing import Generator
 
 from GPT_SoVITS.TTS_infer_pack.Role import RoleConfigLoader
 from tools.asr.funasr_asr_utils import asr_text
+from tools.uvr5.webui import uvr
 
 now_dir = os.getcwd()
 sys.path.append(now_dir)
@@ -482,7 +483,7 @@ async def role_change(role: str):
 
 def ml_service(task_id: str, file_path: str):
     time.sleep(60)
-    # r.hset("tasks", task_id, "completed")
+    r.hset("tasks", task_id, "completed")
 
 async def unzip_file(zip_path, dest_dir):
     with zipfile.ZipFile(zip_path, 'r') as zip_ref:
@@ -499,33 +500,72 @@ async def concatenate_audio_files(audio_files, output_file):
             combined += sound
     combined.export(output_file, format="wav")
 
+def urv5_raw_voice(denoise_dir, denoise_dir_output):
+    vocal_dir = denoise_dir_output+"/vocal"
+    ins_dir = denoise_dir_output+"/ins"
+    os.makedirs(vocal_dir, exist_ok=True)
+    os.makedirs(ins_dir, exist_ok=True)
+    # h2p 提取人声
+    uvr(model_name = "HP2_all_vocals",inp_root = denoise_dir, save_root_vocal=vocal_dir, save_root_ins=ins_dir, agg = 10, format0="wav")
+    paths = [os.path.join(vocal_dir, name) for name in os.listdir(vocal_dir)]
+    # onnx_dereverb
+    uvr(model_name = "onnx_dereverb_By_FoxJoy",inp_root = vocal_dir, save_root_vocal=vocal_dir, save_root_ins=ins_dir, agg = 10, format0="wav")
+    for path in paths:
+        os.remove(path)
+    paths.clear()
+    paths = [os.path.join(vocal_dir, name) for name in os.listdir(vocal_dir)]
+    # DeEcho-Aggressive
+    uvr(model_name="VR-DeEchoAggressive", inp_root=vocal_dir, save_root_vocal=vocal_dir, save_root_ins=ins_dir, agg=10,
+        format0="wav")
+    for path in paths:
+        os.remove(path)
+    paths.clear()
+    return vocal_dir,ins_dir
+
 from fastapi import BackgroundTasks
 import redis
 import uuid
-# r = redis.Redis(host='localhost', port=6380, db=0)
+r = redis.Redis(host='localhost', port=6380, db=0)
 @APP.post("/train")
 async def submit_task(background_tasks: BackgroundTasks, audio_file: UploadFile = File(...)):
     with open(audio_file.filename, "wb") as buffer:
         shutil.copyfileobj(audio_file.file, buffer)
-    extract_dir = "tmp"
-    os.makedirs(extract_dir, exist_ok=True)
-    await unzip_file(audio_file.filename, extract_dir)
-    audio_files = [os.path.join(extract_dir, f) for f in os.listdir(extract_dir) if f.endswith(".wav")]
-    output_wav ="uploaded_audio/"+ audio_file.filename+".wav"
-    print(output_wav)
-    await concatenate_audio_files(audio_files,output_wav)
-    shutil.rmtree(extract_dir)
-    os.remove(audio_file.filename)
-    # 将整个文件urv5降噪，得到一整块音频
 
     # 生成唯一任务号
     task_id = str(uuid.uuid4())
 
-    # 将任务号和状态信息写入 Redis
-    # r.hset("tasks", task_id, "running")
+    # 临时文件夹存上传待降噪的目录
+    denoise_dir = "uploaded_audio/"+task_id + "/input"
+    os.makedirs(denoise_dir, exist_ok=True)
 
+    #存解压目录
+    extract_dir = "tmp"
+    os.makedirs(extract_dir, exist_ok=True)
+    await unzip_file(audio_file.filename, extract_dir)
+    audio_files = [os.path.join(extract_dir, f) for f in os.listdir(extract_dir) if f.endswith(".wav")]
+
+    output_wav =denoise_dir+"/"+ audio_file.filename+".wav"
+    print(output_wav)
+
+    await concatenate_audio_files(audio_files,output_wav)
+    shutil.rmtree(extract_dir)
+    os.remove(audio_file.filename)
+    # 将任务号和状态信息写入 Redis
+    r.hset("tasks", task_id, "denoise running")
+
+    # 将整个文件urv5降噪，得到一整块音频
+    denoise_dir_output = "uploaded_audio/"+task_id + "/output"
+    os.makedirs(denoise_dir_output, exist_ok=True)
+    denoise_dir_vocal, denoise_dir_ins = urv5_raw_voice(denoise_dir,denoise_dir_output)
+
+    r.hset("tasks", task_id, "start training")
+
+    paths = [os.path.join(denoise_dir_vocal, name) for name in os.listdir(denoise_dir_vocal)]
+    for path in paths:
+        print(path)
     # 调用后台任务处理机器学习服务
-    background_tasks.add_task(ml_service, task_id,output_wav)
+    background_tasks.add_task(ml_service, task_id, denoise_dir_vocal)
+
 
     return {"task_id": task_id}
 
